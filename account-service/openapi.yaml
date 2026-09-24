@@ -1,0 +1,379 @@
+openapi: 3.0.3
+info:
+  title: RideLink Account Service API
+  version: 1.0.0
+  description: Passenger and driver accounts, authentication, profiles, roles, and status.
+servers:
+  - url: http://localhost:8081
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/auth/register:
+    post:
+      summary: Register a passenger or driver and issue a token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid registration data
+        "409":
+          description: Email is already registered
+
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate and issue a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid email or password
+        "403":
+          description: Account is not active
+
+  /api/v1/accounts/me:
+    get:
+      summary: View the authenticated user's profile
+      responses:
+        "200":
+          description: Account profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "401":
+          description: Missing or invalid token
+    patch:
+      summary: Update the authenticated user's profile fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateRequest"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "400":
+          description: Invalid update request
+    delete:
+      summary: Soft-close the authenticated user's account
+      parameters:
+        - in: query
+          name: currentPassword
+          required: true
+          schema:
+            type: string
+            format: password
+      responses:
+        "200":
+          description: Account marked CLOSED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "401":
+          description: Current password is incorrect
+
+  /api/v1/accounts/me/email:
+    patch:
+      summary: Change email after verifying the current password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newEmail]
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newEmail:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Email changed; existing tokens invalidated
+        "401":
+          description: Current password is incorrect
+        "409":
+          description: Email is already registered
+
+  /api/v1/accounts/me/password:
+    patch:
+      summary: Change password after verifying the current password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 10
+      responses:
+        "204":
+          description: Password changed; existing tokens invalidated
+        "401":
+          description: Current password is incorrect
+        "400":
+          description: New password is invalid
+
+  /api/v1/admin/accounts:
+    get:
+      summary: List accounts with pagination
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paginated account results
+        "403":
+          description: Admin role required
+
+  /api/v1/admin/accounts/{id}:
+    get:
+      summary: Get an account by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Account profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "404":
+          description: Account not found
+        "403":
+          description: Admin role required
+    delete:
+      summary: Soft-close an account by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Account marked CLOSED
+        "403":
+          description: Admin role required
+
+  /api/v1/admin/accounts/{id}/role:
+    patch:
+      summary: Change an account role
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [PASSENGER, DRIVER, ADMIN]
+      responses:
+        "200":
+          description: Role updated
+        "403":
+          description: Admin role required
+
+  /api/v1/admin/accounts/{id}/status:
+    patch:
+      summary: Change an account status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, SUSPENDED, CLOSED]
+      responses:
+        "200":
+          description: Status updated
+        "403":
+          description: Admin role required
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [fullName, email, password, phone, role]
+      properties:
+        fullName:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 100
+        phone:
+          type: string
+          maxLength: 30
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        profileImageUrl:
+          type: string
+          maxLength: 500
+          nullable: true
+        role:
+          type: string
+          enum: [PASSENGER, DRIVER]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresInSeconds:
+          type: integer
+          format: int64
+        account:
+          $ref: "#/components/schemas/AccountResponse"
+
+    AccountResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        profileImageUrl:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [PASSENGER, DRIVER, ADMIN]
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, CLOSED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProfileUpdateRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          maxLength: 100
+          nullable: true
+        phone:
+          type: string
+          maxLength: 30
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        profileImageUrl:
+          type: string
+          maxLength: 500
+          nullable: true
