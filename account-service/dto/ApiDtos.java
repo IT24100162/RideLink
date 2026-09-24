@@ -1,10 +1,12 @@
 package lk.ridelink.account_service.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 import lk.ridelink.account_service.model.AccountRole;
 import lk.ridelink.account_service.model.AccountStatus;
@@ -18,6 +20,8 @@ public final class ApiDtos {
             @NotBlank @Email @Size(max = 254) String email,
             @NotBlank @Size(min = 10, max = 100) String password,
             @NotBlank @Size(max = 30) String phone,
+            @Past LocalDate dateOfBirth,
+            @Size(max = 500) String profileImageUrl,
             @NotNull AccountRole role) {
     }
 
@@ -38,6 +42,8 @@ public final class ApiDtos {
             String fullName,
             String email,
             String phone,
+            LocalDate dateOfBirth,
+            String profileImageUrl,
             AccountRole role,
             AccountStatus status,
             Instant createdAt,
@@ -45,8 +51,20 @@ public final class ApiDtos {
     }
 
     public record ProfileUpdateRequest(
-            @NotBlank @Size(max = 100) String fullName,
-            @NotBlank @Size(max = 30) String phone) {
+            @Size(max = 100) String fullName,
+            @Size(max = 30) String phone,
+            @Past LocalDate dateOfBirth,
+            @Size(max = 500) String profileImageUrl) {
+    }
+
+    public record EmailChangeRequest(
+            @NotBlank String currentPassword,
+            @NotBlank @Email @Size(max = 254) String newEmail) {
+    }
+
+    public record PasswordChangeRequest(
+            @NotBlank String currentPassword,
+            @NotBlank @Size(min = 10, max = 100) String newPassword) {
     }
 
     public record RoleUpdateRequest(@NotNull AccountRole role) {

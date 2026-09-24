@@ -34,17 +34,18 @@ public class AdminBootstrap {
             }
 
             Instant now = Instant.now();
-            Account admin = new Account(
+            accountRepository.save(new Account(
                     "RideLink Administrator",
                     normalizedEmail,
                     passwordEncoder.encode(password),
                     "N/A",
+                    null,
+                    null,
                     AccountRole.ADMIN,
                     AccountStatus.ACTIVE,
+                    0,
                     now,
-                    now);
-
-            accountRepository.save(admin);
+                    now));
         };
     }
 }

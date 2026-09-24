@@ -11,7 +11,7 @@ import io.swagger.v3.oas.annotations.security.SecurityScheme;
 @OpenAPIDefinition(info = @Info(
         title = "RideLink Account Service API",
         version = "1.0.0",
-        description = "Passenger and driver account registration, login, profiles, roles, and status"))
+        description = "Account registration, authentication, profiles, roles, and status"))
 @SecurityScheme(
         name = "bearerAuth",
         type = SecuritySchemeType.HTTP,

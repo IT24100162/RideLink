@@ -24,7 +24,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final AccountRepository accountRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService, AccountRepository accountRepository) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            AccountRepository accountRepository) {
         this.jwtService = jwtService;
         this.accountRepository = accountRepository;
     }
@@ -40,18 +42,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authorization != null
                 && authorization.startsWith("Bearer ")
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
-            String token = authorization.substring(7);
-
             try {
-                String email = jwtService.extractEmail(token);
-                Account account = accountRepository.findByEmail(email).orElse(null);
+                JwtService.TokenClaims claims =
+                        jwtService.parseToken(authorization.substring(7));
 
-                if (account != null && account.getStatus() == AccountStatus.ACTIVE) {
+                Account account = accountRepository.findByEmail(claims.email()).orElse(null);
+
+                if (account != null
+                        && account.getStatus() == AccountStatus.ACTIVE
+                        && account.getTokenVersion() == claims.version()) {
                     var authorities = List.of(
                             new SimpleGrantedAuthority("ROLE_" + account.getRole().name()));
 
                     var authentication =
-                            new UsernamePasswordAuthenticationToken(email, null, authorities);
+                            new UsernamePasswordAuthenticationToken(
+                                    account.getEmail(), null, authorities);
 
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }

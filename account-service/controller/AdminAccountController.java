@@ -1,5 +1,8 @@
 package lk.ridelink.account_service.controller;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -17,11 +20,15 @@ public class AdminAccountController {
         this.accountService = accountService;
     }
 
-    @PatchMapping("/{id}/status")
-    public AccountResponse changeStatus(
-            @PathVariable String id,
-            @Valid @RequestBody StatusUpdateRequest request) {
-        return accountService.changeStatus(id, request.status());
+    @GetMapping
+    public Page<AccountResponse> listAccounts(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return accountService.listAccounts(pageable);
+    }
+
+    @GetMapping("/{id}")
+    public AccountResponse getAccount(@PathVariable String id) {
+        return accountService.getAccount(id);
     }
 
     @PatchMapping("/{id}/role")
@@ -29,5 +36,17 @@ public class AdminAccountController {
             @PathVariable String id,
             @Valid @RequestBody RoleUpdateRequest request) {
         return accountService.changeRole(id, request.role());
+    }
+
+    @PatchMapping("/{id}/status")
+    public AccountResponse changeStatus(
+            @PathVariable String id,
+            @Valid @RequestBody StatusUpdateRequest request) {
+        return accountService.changeStatus(id, request.status());
+    }
+
+    @DeleteMapping("/{id}")
+    public AccountResponse closeAccount(@PathVariable String id) {
+        return accountService.closeAccountByAdmin(id);
     }
 }
