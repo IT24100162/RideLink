@@ -5,9 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 public class FarePaymentServiceApplication {
-
-	public static void main(String[] args) {
-		SpringApplication.run(FarePaymentServiceApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(FarePaymentServiceApplication.class, args);
+    }
 }
