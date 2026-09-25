@@ -1,0 +1,92 @@
+{
+  "info": {
+    "name": "RideLink Fare & Payment Service",
+    "description": "Estimate a fare, record a simulated final payment for a completed ride, and retrieve its payment and receipt. Uses the Account and Ride Management services.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Successful payment flow",
+      "item": [
+        {
+          "name": "1 - Estimate fare",
+          "request": {
+            "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"}],
+            "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{passengerToken}}","type":"string"}]},
+            "body": {"mode":"raw","raw":"{\n  \"pickup\": {\"latitude\": 6.9344, \"longitude\": 79.8428},\n  \"destination\": {\"latitude\": 6.8941, \"longitude\": 79.8560}\n}","options":{"raw":{"language":"json"}}},
+            "url": "{{fareBaseUrl}}/api/v1/fare-estimates"
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Estimate succeeds', () => pm.response.to.have.status(200));","const body = pm.response.json();","pm.test('Currency is LKR and fare is positive', () => { pm.expect(body.currency).to.eql('LKR'); pm.expect(body.totalFare).to.be.above(0); });","pm.test('Pricing rule is returned', () => pm.expect(body.pricingRule).to.include('120'));"]}}]
+        },
+        {
+          "name": "2 - Calculate final fare and record simulated success",
+          "request": {
+            "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"}],
+            "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{passengerToken}}","type":"string"}]},
+            "body": {"mode":"raw","raw":"{\n  \"rideId\": \"{{completedRideId}}\",\n  \"simulateFailure\": false\n}","options":{"raw":{"language":"json"}}},
+            "url": "{{fareBaseUrl}}/api/v1/payments"
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Payment record created', () => pm.response.to.have.status(200));","const body = pm.response.json();","pm.test('Status is SUCCEEDED and receipt exists', () => { pm.expect(body.status).to.eql('SUCCEEDED'); pm.expect(body.receiptNumber).to.be.a('string').and.not.empty; });","pm.environment.set('paymentId', body.id);"]}}]
+        },
+        {
+          "name": "3 - Retrieve payment by ride",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{passengerToken}}","type":"string"}]},
+            "url": "{{fareBaseUrl}}/api/v1/payments/by-ride/{{completedRideId}}"
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Payment can be retrieved by ride', () => pm.response.to.have.status(200));","pm.test('Retrieved payment has same id', () => pm.expect(pm.response.json().id).to.eql(pm.environment.get('paymentId')));"]}}]
+        },
+        {
+          "name": "4 - Retrieve generated receipt",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{passengerToken}}","type":"string"}]},
+            "url": "{{fareBaseUrl}}/api/v1/payments/{{paymentId}}/receipt"
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Receipt retrieved for successful payment', () => pm.response.to.have.status(200));","pm.test('Receipt refers to the ride and is paid', () => { pm.expect(pm.response.json().rideId).to.eql(pm.environment.get('completedRideId')); pm.expect(pm.response.json().paymentStatus).to.eql('SUCCEEDED'); });"]}}]
+        },
+        {
+          "name": "5 - View my payment history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{passengerToken}}","type":"string"}]},
+            "url": "{{fareBaseUrl}}/api/v1/payments/me"
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Payment history retrieved', () => pm.response.to.have.status(200));","pm.test('History contains this payment', () => pm.expect(pm.response.json().some(p => p.id === pm.environment.get('paymentId'))).to.eql(true));"]}}]
+        }
+      ]
+    },
+    {
+      "name": "Negative simulated decline (use a different completed ride)",
+      "item": [
+        {
+          "name": "1 - Record simulated decline",
+          "request": {
+            "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"}],
+            "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{passengerToken}}","type":"string"}]},
+            "body": {"mode":"raw","raw":"{\n  \"rideId\": \"{{failedCompletedRideId}}\",\n  \"simulateFailure\": true\n}","options":{"raw":{"language":"json"}}},
+            "url": "{{fareBaseUrl}}/api/v1/payments"
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Decline is recorded as a payment result', () => pm.response.to.have.status(200));","const body = pm.response.json();","pm.test('Status is FAILED and no receipt was issued', () => { pm.expect(body.status).to.eql('FAILED'); pm.expect(body.receiptNumber).to.eql(null); });","pm.environment.set('failedPaymentId', body.id);"]}}]
+        },
+        {
+          "name": "2 - Failed payment has no receipt (expected 409)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{passengerToken}}","type":"string"}]},
+            "url": "{{fareBaseUrl}}/api/v1/payments/{{failedPaymentId}}/receipt"
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('Receipt is correctly unavailable for failed payment', () => pm.response.to.have.status(409));"]}}]
+        }
+      ]
+    }
+  ]
+}

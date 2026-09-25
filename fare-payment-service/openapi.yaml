@@ -1,0 +1,178 @@
+openapi: 3.0.3
+info:
+  title: RideLink Fare & Payment API
+  version: v1
+  description: >-
+    Fare estimates and final fares use Haversine distance in kilometres with a 1.25
+    simulated road factor. Fare is LKR 300 base + LKR 120 per billable kilometre +
+    LKR 50 service fee. Billable distance is at least 1 km. Simulated payments do
+    not transfer money. One payment attempt is stored per ride.
+servers:
+  - url: http://localhost:8084
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/fare-estimates:
+    post:
+      summary: Estimate fare between pickup and destination
+      description: PASSENGER or ADMIN. Haversine distance is multiplied by 1.25 and clamped to at least 1 km.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FareEstimateRequest'}
+      responses:
+        '200':
+          description: LKR fare breakdown
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FareEstimate'}
+        '400': {description: Invalid coordinate}
+        '401': {description: Missing or invalid bearer token}
+        '403': {description: Role is not permitted}
+  /api/v1/payments:
+    post:
+      summary: Calculate final fare and record simulated payment
+      description: Passenger only; Ride Management must confirm the caller's ride is COMPLETED. simulateFailure is a test control, not a real gateway.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChargeRequest'}
+      responses:
+        '200':
+          description: Stored payment result; successful payment includes receiptNumber
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '401': {description: Missing or invalid token}
+        '403': {description: Caller is not the passenger who requested the ride}
+        '404': {description: Ride not found}
+        '409': {description: Ride is not completed or receipt cannot be generated}
+        '503': {description: Ride Management Service unavailable}
+  /api/v1/payments/me:
+    get:
+      summary: List current passenger payment records; ADMIN can list all
+      responses:
+        '200':
+          description: Payment records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Payment'}
+  /api/v1/payments/by-ride/{rideId}:
+    get:
+      summary: Retrieve payment record for a ride
+      parameters:
+        - name: rideId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Payment record
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '403': {description: Caller does not own this payment}
+        '404': {description: Payment not found}
+  /api/v1/payments/{paymentId}/receipt:
+    get:
+      summary: Retrieve a receipt for a successful payment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Receipt
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Receipt'}
+        '403': {description: Caller cannot view this payment}
+        '404': {description: Payment not found}
+        '409': {description: Payment failed and has no receipt}
+  /api/v1/payments/{paymentId}:
+    get:
+      summary: Retrieve payment status and fare breakdown
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Payment record
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '403': {description: Caller cannot view this payment}
+        '404': {description: Payment not found}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Coordinate:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude: {type: number, minimum: -90, maximum: 90, example: 6.9344}
+        longitude: {type: number, minimum: -180, maximum: 180, example: 79.8428}
+    FareEstimateRequest:
+      type: object
+      required: [pickup, destination]
+      properties:
+        pickup: {$ref: '#/components/schemas/Coordinate'}
+        destination: {$ref: '#/components/schemas/Coordinate'}
+    FareEstimate:
+      type: object
+      properties:
+        currency: {type: string, example: LKR}
+        straightLineDistanceKm: {type: number}
+        billableDistanceKm: {type: number}
+        baseFare: {type: number, example: 300.00}
+        distanceFare: {type: number}
+        serviceFee: {type: number, example: 50.00}
+        totalFare: {type: number}
+        pricingRule: {type: string}
+        calculatedAt: {type: string, format: date-time}
+    ChargeRequest:
+      type: object
+      required: [rideId, simulateFailure]
+      properties:
+        rideId: {type: string}
+        simulateFailure: {type: boolean, description: true stores a FAILED simulated attempt}
+    Payment:
+      type: object
+      properties:
+        id: {type: string}
+        rideId: {type: string}
+        passengerAccountId: {type: string}
+        driverAccountId: {type: string, nullable: true}
+        currency: {type: string, example: LKR}
+        straightLineDistanceKm: {type: number}
+        billableDistanceKm: {type: number}
+        baseFare: {type: number}
+        distanceFare: {type: number}
+        serviceFee: {type: number}
+        totalFare: {type: number}
+        status: {type: string, enum: [SUCCEEDED, FAILED]}
+        failureMessage: {type: string, nullable: true}
+        receiptNumber: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+    Receipt:
+      type: object
+      properties:
+        receiptNumber: {type: string}
+        paymentId: {type: string}
+        rideId: {type: string}
+        passengerAccountId: {type: string}
+        currency: {type: string}
+        totalFare: {type: number}
+        paymentStatus: {type: string, enum: [SUCCEEDED]}
+        issuedAt: {type: string, format: date-time}
