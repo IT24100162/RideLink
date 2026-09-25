@@ -1,0 +1,108 @@
+{
+  "info": {
+    "name": "RideLink Ride Management - Lifecycle",
+    "description": "Exercises ride creation, invalid transition, assignment through Driver Service, driver acceptance/start/completion, and ride retrieval. Requires the Account, Driver & Vehicle and Ride Management services running. Prepare active passenger and available driver accounts using the other services first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "accountBaseUrl", "value": "http://localhost:8081" },
+    { "key": "driverBaseUrl", "value": "http://localhost:8082" },
+    { "key": "rideBaseUrl", "value": "http://localhost:8083" },
+    { "key": "passengerToken", "value": "" },
+    { "key": "driverToken", "value": "" },
+    { "key": "rideId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1 - Create ride as passenger",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{passengerToken}}", "type": "string" }] },
+        "body": { "mode": "raw", "raw": "{\n  \"pickup\": { \"address\": \"Colombo Fort\", \"latitude\": 6.9344, \"longitude\": 79.8428 },\n  \"destination\": { \"address\": \"Bambalapitiya\", \"latitude\": 6.8941, \"longitude\": 79.8560 }\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{rideBaseUrl}}/api/v1/rides"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Ride created with REQUESTED status', () => pm.response.to.have.status(201));", "const body = pm.response.json();", "pm.collectionVariables.set('rideId', body.id);"] } }]
+    },
+    {
+      "name": "2 - Reject an unassigned driver (negative workflow)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/start"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unassigned driver is rejected with 403', () => pm.response.to.have.status(403));"] } }]
+    },
+    {
+      "name": "3 - Assign nearest eligible driver",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{passengerToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/assign"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Ride assigned', () => pm.response.to.have.status(200));", "pm.test('Status is ASSIGNED', () => pm.expect(pm.response.json().status).to.eql('ASSIGNED'));"] } }]
+    },
+    {
+      "name": "4 - Reject starting before driver acceptance (negative workflow)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/start"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Starting before acceptance is rejected with 409', () => pm.response.to.have.status(409));"] } }]
+    },
+    {
+      "name": "5 - Assigned driver accepts",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/accept"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Driver accepted ride', () => pm.response.to.have.status(200));", "pm.test('Status is ACCEPTED', () => pm.expect(pm.response.json().status).to.eql('ACCEPTED'));"] } }]
+    },
+    {
+      "name": "6 - Assigned driver starts",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/start"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Driver started ride', () => pm.response.to.have.status(200));", "pm.test('Status is IN_PROGRESS', () => pm.expect(pm.response.json().status).to.eql('IN_PROGRESS'));"] } }]
+    },
+    {
+      "name": "7 - Assigned driver completes",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/complete"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Ride completed', () => pm.response.to.have.status(200));", "pm.test('Status is COMPLETED', () => pm.expect(pm.response.json().status).to.eql('COMPLETED'));"] } }]
+    },
+    {
+      "name": "8 - Passenger retrieves the completed ride",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{passengerToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/{{rideId}}"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Passenger can retrieve ride', () => pm.response.to.have.status(200));", "pm.test('Retrieved ride is COMPLETED', () => pm.expect(pm.response.json().status).to.eql('COMPLETED'));"] } }]
+    },
+    {
+      "name": "9 - Driver lists their rides",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "url": "{{rideBaseUrl}}/api/v1/rides/me"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Driver ride list succeeds', () => pm.response.to.have.status(200));", "pm.test('Ride appears in driver list', () => pm.expect(pm.response.json().some(r => r.id === pm.collectionVariables.get('rideId'))).to.eql(true));"] } }]
+    }
+  ]
+}
