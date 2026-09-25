@@ -1,0 +1,373 @@
+openapi: 3.0.3
+info:
+  title: RideLink Driver & Vehicle Service API
+  version: 1.0.0
+  description: >-
+    Driver operational profiles, vehicle information, availability, service areas,
+    simulated locations, and retrieval of eligible available drivers.
+servers:
+  - url: http://localhost:8082
+    description: Local Driver & Vehicle Service
+tags:
+  - name: Drivers
+    description: Driver operational profile and eligible-driver operations
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/drivers/me:
+    get:
+      tags: [Drivers]
+      summary: View my driver profile
+      operationId: getMyDriverProfile
+      responses:
+        '200':
+          description: Driver profile returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Driver operational profile was not found
+  /api/v1/drivers/me/profile:
+    put:
+      tags: [Drivers]
+      summary: Create or update driver operational profile and service area
+      operationId: saveOperationalProfile
+      description: Updating operational details resets availability to UNAVAILABLE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationalProfileRequest'
+      responses:
+        '200':
+          description: Operational profile saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/drivers/me/vehicle:
+    put:
+      tags: [Drivers]
+      summary: Add or update my vehicle
+      operationId: updateMyVehicle
+      description: Updating vehicle details resets availability to UNAVAILABLE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleRequest'
+      responses:
+        '200':
+          description: Vehicle saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Operational profile was not found; create it first
+  /api/v1/drivers/me/location:
+    put:
+      tags: [Drivers]
+      summary: Update simulated current location
+      operationId: updateMyLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+      responses:
+        '200':
+          description: Location saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Operational profile was not found
+  /api/v1/drivers/me/availability:
+    patch:
+      tags: [Drivers]
+      summary: Change my availability
+      operationId: updateMyAvailability
+      description: >-
+        A driver may set AVAILABLE only when the license is valid and the
+        operational profile, vehicle, service area, and location are complete.
+        ON_TRIP is controlled by the Ride Service and is rejected here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityRequest'
+      responses:
+        '200':
+          description: Availability updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Operational profile was not found
+        '409':
+          description: Profile is incomplete or not ready to become available
+  /api/v1/drivers/eligible:
+    get:
+      tags: [Drivers]
+      summary: Find eligible available drivers for a pickup
+      operationId: findEligibleDrivers
+      description: >-
+        Passenger or administrator role required. Returns only AVAILABLE drivers
+        with a complete profile, valid license, vehicle, current location inside
+        their configured service area, pickup inside that service area, and current
+        location within maxDistanceKm of pickup. Results are sorted nearest first.
+        Distance uses the Haversine formula over the small simulated assignment dataset.
+      parameters:
+        - name: pickupLatitude
+          in: query
+          required: true
+          description: Pickup latitude from -90 to 90
+          schema:
+            type: number
+            format: double
+            minimum: -90
+            maximum: 90
+          example: 6.9271
+        - name: pickupLongitude
+          in: query
+          required: true
+          description: Pickup longitude from -180 to 180
+          schema:
+            type: number
+            format: double
+            minimum: -180
+            maximum: 180
+          example: 79.8612
+        - name: maxDistanceKm
+          in: query
+          required: false
+          description: Maximum current-location distance from the pickup
+          schema:
+            type: number
+            format: double
+            default: 10
+            exclusiveMinimum: true
+            minimum: 0
+            maximum: 200
+          example: 10
+      responses:
+        '200':
+          description: Eligible drivers, possibly an empty array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EligibleDriverResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller is not a passenger or administrator
+        '502':
+          description: Account Service returned an unexpected error
+        '503':
+          description: Account Service is unavailable
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Request validation failed or a requested state transition is invalid
+    Unauthorized:
+      description: Missing, invalid, or expired bearer token
+    Forbidden:
+      description: Authenticated account does not have the required role
+  schemas:
+    CoordinateRequest:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 6.9271
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 79.8612
+    CoordinateResponse:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          format: double
+          example: 6.9271
+        longitude:
+          type: number
+          format: double
+          example: 79.8612
+    ServiceAreaRequest:
+      type: object
+      required: [center, radiusKm]
+      properties:
+        center:
+          $ref: '#/components/schemas/CoordinateRequest'
+        radiusKm:
+          type: number
+          format: double
+          minimum: 1
+          maximum: 200
+          example: 25
+    ServiceAreaResponse:
+      type: object
+      required: [center, radiusKm]
+      properties:
+        center:
+          $ref: '#/components/schemas/CoordinateResponse'
+        radiusKm:
+          type: number
+          format: double
+          example: 25
+    OperationalProfileRequest:
+      type: object
+      required: [driverLicenseNumber, licenseExpiryDate, serviceArea]
+      properties:
+        driverLicenseNumber:
+          type: string
+          maxLength: 50
+          example: B1234567
+        licenseExpiryDate:
+          type: string
+          format: date
+          example: '2030-12-31'
+        serviceArea:
+          $ref: '#/components/schemas/ServiceAreaRequest'
+    VehicleRequest:
+      type: object
+      required: [registrationNumber, type, make, model, year, color, seatingCapacity]
+      properties:
+        registrationNumber:
+          type: string
+          maxLength: 20
+          example: ABC-1234
+        type:
+          type: string
+          enum: [SEDAN, SUV, VAN, MOTORCYCLE, OTHER]
+        make:
+          type: string
+          maxLength: 50
+          example: Toyota
+        model:
+          type: string
+          maxLength: 50
+          example: Corolla
+        year:
+          type: integer
+          minimum: 1990
+          maximum: 2100
+          example: 2022
+        color:
+          type: string
+          maxLength: 30
+          example: White
+        seatingCapacity:
+          type: integer
+          minimum: 1
+          maximum: 20
+          example: 4
+    LocationRequest:
+      $ref: '#/components/schemas/CoordinateRequest'
+    AvailabilityRequest:
+      type: object
+      required: [availability]
+      properties:
+        availability:
+          type: string
+          enum: [AVAILABLE, UNAVAILABLE, ON_TRIP]
+          example: AVAILABLE
+    VehicleResponse:
+      allOf:
+        - $ref: '#/components/schemas/VehicleRequest'
+    DriverProfileResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        driverLicenseNumber:
+          type: string
+        licenseExpiryDate:
+          type: string
+          format: date
+        availability:
+          type: string
+          enum: [AVAILABLE, UNAVAILABLE, ON_TRIP]
+        serviceArea:
+          $ref: '#/components/schemas/ServiceAreaResponse'
+        currentLocation:
+          $ref: '#/components/schemas/CoordinateResponse'
+        vehicle:
+          $ref: '#/components/schemas/VehicleResponse'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    EligibleDriverResponse:
+      type: object
+      required: [driverAccountId, vehicle, currentLocation, distanceKm]
+      properties:
+        driverAccountId:
+          type: string
+        vehicle:
+          $ref: '#/components/schemas/VehicleResponse'
+        currentLocation:
+          $ref: '#/components/schemas/CoordinateResponse'
+        distanceKm:
+          type: number
+          format: double
+          description: Haversine distance from the simulated driver location to pickup
+          example: 0

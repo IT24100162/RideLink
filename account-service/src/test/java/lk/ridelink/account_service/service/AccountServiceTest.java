@@ -4,10 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +35,8 @@ import lk.ridelink.account_service.security.JwtService;
 @ExtendWith(MockitoExtension.class)
 class AccountServiceTest {
 
+    private static final LocalDate SAMPLE_DOB = LocalDate.of(1995, 5, 20);
+
     @Mock
     private AccountRepository accountRepository;
 
@@ -53,8 +58,11 @@ class AccountServiceTest {
                 "passenger@example.com",
                 "hashed-password",
                 "0771234567",
+                SAMPLE_DOB,
+                null,
                 AccountRole.PASSENGER,
                 AccountStatus.ACTIVE,
+                0,
                 Instant.parse("2026-09-24T10:00:00Z"),
                 Instant.parse("2026-09-24T10:00:00Z"));
 
@@ -68,6 +76,8 @@ class AccountServiceTest {
                 "Passenger@Example.com",
                 "Passphrase123!",
                 "0771234567",
+                SAMPLE_DOB,
+                null,
                 AccountRole.PASSENGER);
 
         when(accountRepository.existsByEmail("passenger@example.com")).thenReturn(false);
@@ -77,7 +87,7 @@ class AccountServiceTest {
             saved.setId("account-123");
             return saved;
         });
-        when(jwtService.generateToken("passenger@example.com"))
+        when(jwtService.generateToken(eq("passenger@example.com"), anyInt()))
                 .thenReturn("test.jwt.token");
         when(jwtService.getExpirationSeconds()).thenReturn(3600L);
 
@@ -99,6 +109,8 @@ class AccountServiceTest {
                 "driver@example.com",
                 "Passphrase123!",
                 "0712345678",
+                SAMPLE_DOB,
+                null,
                 AccountRole.DRIVER);
 
         when(accountRepository.existsByEmail("driver@example.com")).thenReturn(false);
@@ -108,7 +120,7 @@ class AccountServiceTest {
             saved.setId("driver-123");
             return saved;
         });
-        when(jwtService.generateToken("driver@example.com"))
+        when(jwtService.generateToken(eq("driver@example.com"), anyInt()))
                 .thenReturn("driver.jwt.token");
         when(jwtService.getExpirationSeconds()).thenReturn(3600L);
 
@@ -127,6 +139,8 @@ class AccountServiceTest {
                 "passenger@example.com",
                 "Passphrase123!",
                 "0771234567",
+                SAMPLE_DOB,
+                null,
                 AccountRole.PASSENGER);
 
         when(accountRepository.existsByEmail("passenger@example.com")).thenReturn(true);
@@ -145,6 +159,8 @@ class AccountServiceTest {
                 "someone@example.com",
                 "Passphrase123!",
                 "0771234567",
+                SAMPLE_DOB,
+                null,
                 AccountRole.ADMIN);
 
         ResponseStatusException exception = assertThrows(
@@ -160,7 +176,7 @@ class AccountServiceTest {
                 .thenReturn(Optional.of(activePassenger));
         when(passwordEncoder.matches("Passphrase123!", "hashed-password"))
                 .thenReturn(true);
-        when(jwtService.generateToken("passenger@example.com"))
+        when(jwtService.generateToken(eq("passenger@example.com"), anyInt()))
                 .thenReturn("test.jwt.token");
         when(jwtService.getExpirationSeconds()).thenReturn(3600L);
 
@@ -224,13 +240,27 @@ class AccountServiceTest {
         when(accountRepository.save(any(Account.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = accountService.updateProfile(
+        var result = accountService.updateMyProfile(
                 "passenger@example.com",
-                new ProfileUpdateRequest("Updated Name", "0712345678"));
+                new ProfileUpdateRequest("Updated Name", "0712345678", null, null));
 
         assertEquals("Updated Name", result.fullName());
         assertEquals("0712345678", result.phone());
         assertEquals("passenger@example.com", result.email());
         verify(accountRepository).save(activePassenger);
+    }
+
+    @Test
+    void updateProfileRejectsEmptyRequest() {
+        when(accountRepository.findByEmail("passenger@example.com"))
+                .thenReturn(Optional.of(activePassenger));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> accountService.updateMyProfile(
+                        "passenger@example.com",
+                        new ProfileUpdateRequest(null, null, null, null)));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
     }
 }

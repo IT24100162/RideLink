@@ -1,0 +1,214 @@
+{
+  "info": {
+    "_postman_id": "7f0df381-a3af-4e8f-bb2a-537010008081",
+    "name": "RideLink Driver & Vehicle Service - End-to-End",
+    "description": "Registers example DRIVER and PASSENGER accounts through Account Service, then exercises driver profile, vehicle, location, availability, eligible-driver lookup, and negative authorization/validation cases. Select the companion environment and run in order. Each run creates unique example account emails.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": []
+      }
+    }
+  ],
+  "variable": [],
+  "item": [
+    {
+      "name": "1. Register driver account",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const runId = pm.variables.replaceIn('{{$guid}}').replaceAll('-', '').slice(0, 12);",
+              "pm.environment.set('driverEmail', `driver.${runId}@example.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Driver registration returns 201', function () { pm.response.to.have.status(201); });",
+              "const body = pm.response.json();",
+              "pm.environment.set('driverToken', body.accessToken);",
+              "pm.environment.set('driverAccountId', body.account.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Postman Example Driver\",\n  \"email\": \"{{driverEmail}}\",\n  \"password\": \"{{driverPassword}}\",\n  \"phone\": \"0771234567\",\n  \"dateOfBirth\": \"1998-05-01\",\n  \"profileImageUrl\": null,\n  \"role\": \"DRIVER\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{accountBaseUrl}}/api/v1/auth/register",
+        "description": "Creates a synthetic DRIVER account in Account Service for this run."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Login driver",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('Driver login succeeds', function () { pm.response.to.have.status(200); });",
+            "const body = pm.response.json();",
+            "pm.environment.set('driverToken', body.accessToken);",
+            "pm.environment.set('driverAccountId', body.account.id);"
+          ]
+        }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{driverEmail}}\",\n  \"password\": \"{{driverPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{accountBaseUrl}}/api/v1/auth/login"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Create or update driver operational profile and service area",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": ["pm.test('Operational profile saved and driver starts unavailable', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().availability).to.eql('UNAVAILABLE'); });"]
+        }
+      }],
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"driverLicenseNumber\": \"B1234567\",\n  \"licenseExpiryDate\": \"2030-12-31\",\n  \"serviceArea\": {\n    \"center\": {\n      \"latitude\": 6.9271,\n      \"longitude\": 79.8612\n    },\n    \"radiusKm\": 25\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/drivers/me/profile"
+      },
+      "response": []
+    },
+    {
+      "name": "4. Add or update driver vehicle",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Vehicle saved', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().vehicle.registrationNumber).to.eql('ABC-1234'); });"] } }],
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registrationNumber\": \"ABC-1234\",\n  \"type\": \"SEDAN\",\n  \"make\": \"Toyota\",\n  \"model\": \"Corolla\",\n  \"year\": 2022,\n  \"color\": \"White\",\n  \"seatingCapacity\": 4\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/drivers/me/vehicle"
+      },
+      "response": []
+    },
+    {
+      "name": "5. Update simulated current location",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Location saved', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().currentLocation.latitude).to.eql(6.9271); });"] } }],
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "body": { "mode": "raw", "raw": "{\n  \"latitude\": 6.9271,\n  \"longitude\": 79.8612\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{baseUrl}}/api/v1/drivers/me/location"
+      },
+      "response": []
+    },
+    {
+      "name": "6. Set driver available",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Complete driver becomes available', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().availability).to.eql('AVAILABLE'); });"] } }],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "body": { "mode": "raw", "raw": "{\n  \"availability\": \"AVAILABLE\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{baseUrl}}/api/v1/drivers/me/availability"
+      },
+      "response": []
+    },
+    {
+      "name": "7. Get my driver profile",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Driver can view own profile', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().accountId).to.eql(pm.environment.get('driverAccountId')); });"] } }],
+      "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] }, "url": "{{baseUrl}}/api/v1/drivers/me" },
+      "response": []
+    },
+    {
+      "name": "8. Register passenger account for eligible-driver lookup",
+      "event": [
+        { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["const runId = pm.variables.replaceIn('{{$guid}}').replaceAll('-', '').slice(0, 12);", "pm.environment.set('passengerEmail', `passenger.${runId}@example.com`);"] } },
+        { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Passenger registration returns 201', function () { pm.response.to.have.status(201); });"] } }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Postman Example Passenger\",\n  \"email\": \"{{passengerEmail}}\",\n  \"password\": \"{{passengerPassword}}\",\n  \"phone\": \"0777654321\",\n  \"dateOfBirth\": \"1998-05-01\",\n  \"profileImageUrl\": null,\n  \"role\": \"PASSENGER\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{accountBaseUrl}}/api/v1/auth/register"
+      },
+      "response": []
+    },
+    {
+      "name": "9. Login passenger",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Passenger login succeeds', function () { pm.response.to.have.status(200); });", "pm.environment.set('passengerToken', pm.response.json().accessToken);"] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{passengerEmail}}\",\n  \"password\": \"{{passengerPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{accountBaseUrl}}/api/v1/auth/login"
+      },
+      "response": []
+    },
+    {
+      "name": "10. Passenger finds eligible drivers",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Eligible lookup succeeds and finds the available driver', function () { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); pm.expect(pm.response.json().some(d => d.driverAccountId === pm.environment.get('driverAccountId'))).to.eql(true); });"] } }],
+      "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{passengerToken}}", "type": "string" }] }, "url": "{{baseUrl}}/api/v1/drivers/eligible?pickupLatitude=6.9271&pickupLongitude=79.8612&maxDistanceKm=10" },
+      "response": []
+    },
+    {
+      "name": "11. Reject driver role from eligible-driver search",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Driver role is forbidden from passenger lookup', function () { pm.response.to.have.status(403); });"] } }],
+      "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] }, "url": "{{baseUrl}}/api/v1/drivers/eligible?pickupLatitude=6.9271&pickupLongitude=79.8612&maxDistanceKm=10" },
+      "response": []
+    },
+    {
+      "name": "12. Eligible lookup returns empty when pickup is outside service area",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('No eligible drivers returns an empty array', function () { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.eql([]); });"] } }],
+      "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{passengerToken}}", "type": "string" }] }, "url": "{{baseUrl}}/api/v1/drivers/eligible?pickupLatitude=0.1&pickupLongitude=0.1&maxDistanceKm=10" },
+      "response": []
+    },
+    {
+      "name": "13. Reject driver setting ON_TRIP directly",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Ride-owned ON_TRIP state is rejected', function () { pm.response.to.have.status(400); });"] } }],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+        "body": { "mode": "raw", "raw": "{\n  \"availability\": \"ON_TRIP\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{baseUrl}}/api/v1/drivers/me/availability"
+      },
+      "response": []
+    },
+    {
+      "name": "14. Reject unauthenticated profile request",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unauthenticated profile request is rejected', function () { pm.response.to.have.status(401); });"] } }],
+      "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/api/v1/drivers/me" },
+      "response": []
+    }
+  ]
+}
