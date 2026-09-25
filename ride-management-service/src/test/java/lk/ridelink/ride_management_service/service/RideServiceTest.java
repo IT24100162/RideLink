@@ -49,15 +49,15 @@ class RideServiceTest {
         ride.setPickup(new Ride.Place("Colombo", 6.9271, 79.8612));
         ride.setDestination(new Ride.Place("Kandy", 7.2906, 80.6337));
         ride.setStatus(RideStatus.REQUESTED);
+    }
+
+    @Test
+    void createStartsRequestedAndPersistsPickupAndDestination() {
         when(repository.save(any(Ride.class))).thenAnswer(invocation -> {
             Ride saved = invocation.getArgument(0);
             if (saved.getId() == null) saved.setId("ride-1");
             return saved;
         });
-    }
-
-    @Test
-    void createStartsRequestedAndPersistsPickupAndDestination() {
         var result = service.create(request(), passenger);
         assertEquals(RideStatus.REQUESTED, result.status());
         assertEquals("passenger-1", result.passengerAccountId());
@@ -68,6 +68,7 @@ class RideServiceTest {
 
     @Test
     void assignmentChoosesFirstEligibleCandidate() {
+        when(repository.save(any(Ride.class))).thenAnswer(invocation -> invocation.getArgument(0));
         ride.setId("ride-1");
         when(repository.findById("ride-1")).thenReturn(Optional.of(ride));
         when(driverClient.findEligibleDrivers(anyString(), anyDouble(), anyDouble(), anyDouble()))
@@ -92,6 +93,7 @@ class RideServiceTest {
 
     @Test
     void assignedDriverCanCompleteValidLifecycle() {
+        when(repository.save(any(Ride.class))).thenAnswer(invocation -> invocation.getArgument(0));
         ride.setStatus(RideStatus.ASSIGNED);
         ride.setAssignedDriverAccountId(driver.id());
         when(repository.findById("ride-1")).thenReturn(Optional.of(ride));

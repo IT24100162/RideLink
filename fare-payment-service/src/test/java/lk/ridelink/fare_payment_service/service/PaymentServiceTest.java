@@ -42,16 +42,16 @@ class PaymentServiceTest {
         completedRide = new RideSnapshot("ride-1", passenger.id(), "driver-1",
                 new Place("Colombo Fort", 6.9344, 79.8428),
                 new Place("Bambalapitiya", 6.8941, 79.8560), "COMPLETED");
+    }
+
+    @Test
+    void successfulChargeStoresPaymentAndGeneratesReceipt() {
         when(rideClient.getRide("Bearer token", "ride-1")).thenReturn(completedRide);
         when(repository.save(any(Payment.class))).thenAnswer(invocation -> {
             Payment payment = invocation.getArgument(0);
             payment.setId("payment-1");
             return payment;
         });
-    }
-
-    @Test
-    void successfulChargeStoresPaymentAndGeneratesReceipt() {
         when(repository.findByRideId("ride-1")).thenReturn(Optional.empty());
         var result = service.charge(new ChargeRequest("ride-1", false), "Bearer token", passenger);
         assertEquals(PaymentStatus.SUCCEEDED, result.status());
@@ -63,6 +63,12 @@ class PaymentServiceTest {
 
     @Test
     void simulatedDeclineIsPersistedWithoutReceipt() {
+        when(rideClient.getRide("Bearer token", "ride-1")).thenReturn(completedRide);
+        when(repository.save(any(Payment.class))).thenAnswer(invocation -> {
+            Payment payment = invocation.getArgument(0);
+            payment.setId("payment-1");
+            return payment;
+        });
         when(repository.findByRideId("ride-1")).thenReturn(Optional.empty());
         var result = service.charge(new ChargeRequest("ride-1", true), "Bearer token", passenger);
         assertEquals(PaymentStatus.FAILED, result.status());
@@ -72,7 +78,6 @@ class PaymentServiceTest {
 
     @Test
     void paymentIsRejectedUntilRideIsCompleted() {
-        when(repository.findByRideId("ride-1")).thenReturn(Optional.empty());
         when(rideClient.getRide("Bearer token", "ride-1"))
                 .thenReturn(new RideSnapshot("ride-1", passenger.id(), "driver-1",
                         completedRide.pickup(), completedRide.destination(), "IN_PROGRESS"));
@@ -84,6 +89,7 @@ class PaymentServiceTest {
 
     @Test
     void onlyRidePassengerCanPay() {
+        when(rideClient.getRide("Bearer token", "ride-1")).thenReturn(completedRide);
         AccountIdentity stranger = new AccountIdentity("other-passenger", "x@example.com", "PASSENGER", "ACTIVE");
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.charge(new ChargeRequest("ride-1", false), "Bearer token", stranger));
@@ -92,6 +98,7 @@ class PaymentServiceTest {
 
     @Test
     void repeatedChargeForSameRideReturnsExistingPayment() {
+        when(rideClient.getRide("Bearer token", "ride-1")).thenReturn(completedRide);
         Payment prior = new Payment();
         prior.setId("payment-existing");
         prior.setRideId("ride-1");
